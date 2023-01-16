@@ -55,7 +55,9 @@ type bpfSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
 	EgressFlowParse  *ebpf.ProgramSpec `ebpf:"egress_flow_parse"`
+	EgressPanoParse  *ebpf.ProgramSpec `ebpf:"egress_pano_parse"`
 	IngressFlowParse *ebpf.ProgramSpec `ebpf:"ingress_flow_parse"`
+	IngressPanoParse *ebpf.ProgramSpec `ebpf:"ingress_pano_parse"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
@@ -64,6 +66,7 @@ type bpfProgramSpecs struct {
 type bpfMapSpecs struct {
 	AggregatedFlows *ebpf.MapSpec `ebpf:"aggregated_flows"`
 	DirectFlows     *ebpf.MapSpec `ebpf:"direct_flows"`
+	PacketPayloads  *ebpf.MapSpec `ebpf:"packet_payloads"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -87,12 +90,14 @@ func (o *bpfObjects) Close() error {
 type bpfMaps struct {
 	AggregatedFlows *ebpf.Map `ebpf:"aggregated_flows"`
 	DirectFlows     *ebpf.Map `ebpf:"direct_flows"`
+	PacketPayloads  *ebpf.Map `ebpf:"packet_payloads"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.AggregatedFlows,
 		m.DirectFlows,
+		m.PacketPayloads,
 	)
 }
 
@@ -101,13 +106,17 @@ func (m *bpfMaps) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
 	EgressFlowParse  *ebpf.Program `ebpf:"egress_flow_parse"`
+	EgressPanoParse  *ebpf.Program `ebpf:"egress_pano_parse"`
 	IngressFlowParse *ebpf.Program `ebpf:"ingress_flow_parse"`
+	IngressPanoParse *ebpf.Program `ebpf:"ingress_pano_parse"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.EgressFlowParse,
+		p.EgressPanoParse,
 		p.IngressFlowParse,
+		p.IngressPanoParse,
 	)
 }
 

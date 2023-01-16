@@ -156,3 +156,10 @@ func ReadFrom(reader io.Reader) (*RawRecord, error) {
 	err := binary.Read(reader, binary.LittleEndian, &fr)
 	return &fr, err
 }
+
+// ReadFrom reads a Record from a binary source, in LittleEndian order
+func RawReadFrom(reader io.Reader) (*[]byte, error) {
+	var fr []byte
+	err := binary.Read(reader, binary.LittleEndian, &fr)
+	return &fr, err
+}

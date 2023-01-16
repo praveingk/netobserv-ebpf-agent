@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/gavv/monotime"
 	"github.com/netobserv/gopipes/pkg/node"
@@ -61,10 +62,12 @@ type Flows struct {
 	ebpf       ebpfFlowFetcher
 
 	// processing nodes to be wired in the buildAndStartPipeline method
-	mapTracer *flow.MapTracer
-	rbTracer  *flow.RingBufTracer
-	accounter *flow.Accounter
-	exporter  node.TerminalFunc[[]*flow.Record]
+
+	mapTracer  *flow.MapTracer
+	rbTracer   *flow.RingBufTracer
+	perfTracer *flow.PerfTracer
+	accounter  *flow.Accounter
+	exporter   node.TerminalFunc[[]*flow.Record]
 
 	// elements used to decorate flows with extra information
 	interfaceNamer flow.InterfaceNamer
@@ -80,6 +83,7 @@ type ebpfFlowFetcher interface {
 
 	LookupAndDeleteMap() map[flow.RecordKey][]flow.RecordMetrics
 	ReadRingBuf() (ringbuf.Record, error)
+	ReadPerf() (perf.Record, error)
 }
 
 // FlowsAgent instantiates a new agent, given a configuration.
@@ -155,9 +159,12 @@ func flowsAgent(cfg *Config,
 
 	mapTracer := flow.NewMapTracer(fetcher, cfg.CacheActiveTimeout)
 	rbTracer := flow.NewRingBufTracer(fetcher, mapTracer, cfg.CacheActiveTimeout)
+	perfTracer := flow.NewPerfTracer(fetcher, cfg.CacheActiveTimeout)
+
 	accounter := flow.NewAccounter(
 		cfg.CacheMaxFlows, cfg.CacheActiveTimeout, time.Now, monotime.Now)
 	return &Flows{
+
 		ebpf:           fetcher,
 		exporter:       exporter,
 		interfaces:     registerer,
@@ -165,6 +172,7 @@ func flowsAgent(cfg *Config,
 		cfg:            cfg,
 		mapTracer:      mapTracer,
 		rbTracer:       rbTracer,
+		perfTracer:     perfTracer,
 		accounter:      accounter,
 		agentIP:        agentIP,
 		interfaceNamer: interfaceNamer,
@@ -349,6 +357,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	alog.Debug("connecting flows' processing graph")
 	mapTracer := node.AsStart(f.mapTracer.TraceLoop(ctx))
 	rbTracer := node.AsStart(f.rbTracer.TraceLoop(ctx))
+	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 
 	accounter := node.AsMiddle(f.accounter.Account,
 		node.ChannelBufferLen(f.cfg.BuffersLength))
@@ -369,6 +378,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 
 	rbTracer.SendsTo(accounter)
 
+	perfTracer.SendsTo(accounter)
 	if f.cfg.Deduper == DeduperFirstCome {
 		deduper := node.AsMiddle(flow.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark),
 			node.ChannelBufferLen(f.cfg.BuffersLength))
@@ -385,6 +395,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	alog.Debug("starting graph")
 	mapTracer.Start()
 	rbTracer.Start()
+	perfTracer.Start()
 	return export, nil
 }
 

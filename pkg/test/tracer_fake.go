@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
+	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/netobserv/netobserv-ebpf-agent/pkg/flow"
 	"github.com/netobserv/netobserv-ebpf-agent/pkg/ifaces"
@@ -14,6 +15,7 @@ type TracerFake struct {
 	interfaces map[ifaces.Interface]struct{}
 	mapLookups chan map[flow.RecordKey][]flow.RecordMetrics
 	ringBuf    chan ringbuf.Record
+	perfBuf    chan perf.Record
 }
 
 func NewTracerFake() *TracerFake {
@@ -21,6 +23,7 @@ func NewTracerFake() *TracerFake {
 		interfaces: map[ifaces.Interface]struct{}{},
 		mapLookups: make(chan map[flow.RecordKey][]flow.RecordMetrics, 100),
 		ringBuf:    make(chan ringbuf.Record, 100),
+		perfBuf:    make(chan perf.Record, 100),
 	}
 }
 
@@ -43,6 +46,10 @@ func (m *TracerFake) LookupAndDeleteMap() map[flow.RecordKey][]flow.RecordMetric
 
 func (m *TracerFake) ReadRingBuf() (ringbuf.Record, error) {
 	return <-m.ringBuf, nil
+}
+
+func (m *TracerFake) ReadPerf() (perf.Record, error) {
+	return <-m.perfBuf, nil
 }
 
 func (m *TracerFake) AppendLookupResults(results map[flow.RecordKey][]flow.RecordMetrics) {

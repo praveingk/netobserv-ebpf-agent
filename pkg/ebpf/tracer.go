@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/netobserv/netobserv-ebpf-agent/pkg/flow"
@@ -37,7 +38,9 @@ type FlowFetcher struct {
 	qdiscs         map[ifaces.Interface]*netlink.GenericQdisc
 	egressFilters  map[ifaces.Interface]*netlink.BpfFilter
 	ingressFilters map[ifaces.Interface]*netlink.BpfFilter
+	ingressPano    map[ifaces.Interface]*netlink.BpfFilter
 	ringbufReader  *ringbuf.Reader
+	perfReader     *perf.Reader
 	cacheMaxSize   int
 	enableIngress  bool
 	enableEgress   bool
@@ -81,11 +84,19 @@ func NewFlowFetcher(
 	if err != nil {
 		return nil, fmt.Errorf("accessing to ringbuffer: %w", err)
 	}
+
+	// read events from igress+egress perf array
+	packets, err := perf.NewReader(objects.PacketPayloads, 10000)
+	if err != nil {
+		return nil, fmt.Errorf("accessing to perf: %w", err)
+	}
 	return &FlowFetcher{
 		objects:        &objects,
 		ringbufReader:  flows,
+		perfReader:     packets,
 		egressFilters:  map[ifaces.Interface]*netlink.BpfFilter{},
 		ingressFilters: map[ifaces.Interface]*netlink.BpfFilter{},
+		ingressPano:    map[ifaces.Interface]*netlink.BpfFilter{},
 		qdiscs:         map[ifaces.Interface]*netlink.GenericQdisc{},
 		cacheMaxSize:   cacheMaxSize,
 		enableIngress:  ingress,
@@ -199,6 +210,24 @@ func (m *FlowFetcher) registerIngress(iface ifaces.Interface, ipvlan netlink.Lin
 		}
 	}
 	m.ingressFilters[iface] = ingressFilter
+
+	panoFilter := &netlink.BpfFilter{
+		FilterAttrs:  ingressAttrs,
+		Fd:           m.objects.IngressPanoParse.FD(),
+		Name:         "tc/ingress_pano_parse",
+		DirectAction: true,
+	}
+	if err := netlink.FilterDel(panoFilter); err == nil {
+		ilog.Warn("pano filter already existed. Deleted it")
+	}
+	if err := netlink.FilterAdd(panoFilter); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			ilog.WithError(err).Warn("pano filter already exists. Ignoring")
+		} else {
+			return fmt.Errorf("failed to create pano filter: %w", err)
+		}
+	}
+	m.ingressPano[iface] = panoFilter
 	return nil
 }
 
@@ -245,6 +274,12 @@ func (m *FlowFetcher) Close() error {
 			errs = append(errs, fmt.Errorf("deleting ingress filter: %w", err))
 		}
 	}
+	for iface, igf := range m.ingressPano {
+		log.WithField("interface", iface).Debug("deleting ingress pano")
+		if err := netlink.FilterDel(igf); err != nil {
+			errs = append(errs, fmt.Errorf("deleting ingress pano: %w", err))
+		}
+	}
 	m.ingressFilters = map[ifaces.Interface]*netlink.BpfFilter{}
 	for iface, qd := range m.qdiscs {
 		log.WithField("interface", iface).Debug("deleting Qdisc")
@@ -266,6 +301,10 @@ func (m *FlowFetcher) Close() error {
 
 func (m *FlowFetcher) ReadRingBuf() (ringbuf.Record, error) {
 	return m.ringbufReader.Read()
+}
+
+func (m *FlowFetcher) ReadPerf() (perf.Record, error) {
+	return m.perfReader.Read()
 }
 
 // LookupAndDeleteMap reads all the entries from the eBPF map and removes them from it.

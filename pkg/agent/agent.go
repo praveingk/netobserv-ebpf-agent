@@ -366,6 +366,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 	mapTracer := node.AsStart(f.mapTracer.TraceLoop(ctx))
 	rbTracer := node.AsStart(f.rbTracer.TraceLoop(ctx))
+	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 
 	accounter := node.AsMiddle(f.accounter.Account,
 		node.ChannelBufferLen(f.cfg.BuffersLength))
@@ -410,12 +411,9 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	decorator.SendsTo(export)
 
 	alog.Debug("starting graph")
-	if pano {
-		perfTracer.Start()
-	} else {
-		mapTracer.Start()
-		rbTracer.Start()
-	}
+	mapTracer.Start()
+	rbTracer.Start()
+	perfTracer.Start()
 	return export, nil
 }
 

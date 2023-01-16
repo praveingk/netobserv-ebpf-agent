@@ -53,7 +53,7 @@ func (m *TracerFake) ReadPerf() (perf.Record, error) {
 	return <-m.perfBuf, nil
 }
 
-func (m *TracerFake) AppendLookupResults(results map[ebpf.BpfFlowId][]ebpf.BpfFlowMetrics) {
+func (m *TracerFake) AppendLookupResults(results map[flow.RecordKey][]flow.RecordMetrics) {
 	m.mapLookups <- results
 }
 

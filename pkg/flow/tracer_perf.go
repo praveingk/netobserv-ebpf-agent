@@ -45,7 +45,6 @@ func (m *PerfTracer) TraceLoop(ctx context.Context) node.StartFunc[*RawRecord] {
 				return
 			default:
 				if err := m.listenAndForwardPerf(debugging, out); err != nil {
-
 					if errors.Is(err, perf.ErrClosed) {
 						rtlog.Debug("Received signal, exiting..")
 						return

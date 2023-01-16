@@ -80,4 +80,9 @@ typedef struct payload_meta_t {
 
 // Force emitting struct flow_record into the ELF.
 const struct flow_record_t *unused3 __attribute__((unused));
+// Payload Meta is a tuple containing information about the payload
+typedef struct payload_meta_t {
+	u32 if_index;
+	u32 pkt_len;
+} __attribute__((packed)) payload_meta;
 #endif

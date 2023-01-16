@@ -35,8 +35,8 @@ func NewPerfTracer(
 	}
 }
 
-func (m *PerfTracer) TraceLoop(ctx context.Context) node.StartFunc[*[]byte] {
-	return func(out chan<- *[]byte) {
+func (m *PerfTracer) TraceLoop(ctx context.Context) node.StartFunc[*RawRecord] {
+	return func(out chan<- *RawRecord) {
 		debugging := logrus.IsLevelEnabled(logrus.DebugLevel)
 		for {
 			select {
@@ -45,12 +45,11 @@ func (m *PerfTracer) TraceLoop(ctx context.Context) node.StartFunc[*[]byte] {
 				return
 			default:
 				if err := m.listenAndForwardPerf(debugging, out); err != nil {
-
 					if errors.Is(err, perf.ErrClosed) {
-						pblog.Debug("Received signal, exiting..")
+						rtlog.Debug("Received signal, exiting..")
 						return
 					}
-					pblog.WithError(err).Warn("ignoring flow event")
+					rtlog.WithError(err).Warn("ignoring flow event")
 					continue
 				}
 			}
@@ -58,23 +57,22 @@ func (m *PerfTracer) TraceLoop(ctx context.Context) node.StartFunc[*[]byte] {
 	}
 }
 
-func (m *PerfTracer) listenAndForwardPerf(debugging bool, forwardCh chan<- *[]byte) error {
+func (m *PerfTracer) listenAndForwardPerf(debugging bool, forwardCh chan<- *RawRecord) error {
 	event, err := m.perfArray.ReadPerf()
 	if err != nil {
 		return fmt.Errorf("reading from perf event array: %w", err)
 	}
 	// Parses the ringbuf event entry into an Event structure.
-	packet, err := RawReadFrom(bytes.NewBuffer(event.RawSample))
+	readFlow, err := ReadFrom(bytes.NewBuffer(event.RawSample))
 	if err != nil {
-		return fmt.Errorf("parsing data received from the perf event array: %w %+v", err, *packet)
+		return fmt.Errorf("parsing data received from the perf event array: %w", err)
 	}
 	if debugging {
 		m.stats.logRingBufferFlows(false)
 	}
 
-	pblog.Infof("Read packet from perf array :%+v", *packet)
 	// Will need to send it to accounter anyway to account regardless of complete/ongoing flow
-	forwardCh <- packet
+	forwardCh <- readFlow
 
 	return nil
 }

@@ -65,12 +65,11 @@ type Flows struct {
 
 	// processing nodes to be wired in the buildAndStartPipeline method
 
-	mapTracer    *flow.MapTracer
-	rbTracer     *flow.RingBufTracer
-	perfTracer   *flow.PerfTracer
-	accounter    *flow.Accounter
-	packetbuffer *exporter.Packets
-	exporter     node.TerminalFunc[[]*flow.Record]
+	mapTracer  *flow.MapTracer
+	rbTracer   *flow.RingBufTracer
+	perfTracer *flow.PerfTracer
+	accounter  *flow.Accounter
+	exporter   node.TerminalFunc[[]*flow.Record]
 
 	// elements used to decorate flows with extra information
 	interfaceNamer flow.InterfaceNamer
@@ -367,6 +366,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 	mapTracer := node.AsStart(f.mapTracer.TraceLoop(ctx))
 	rbTracer := node.AsStart(f.rbTracer.TraceLoop(ctx))
+	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 
 	accounter := node.AsMiddle(f.accounter.Account,
 		node.ChannelBufferLen(f.cfg.BuffersLength))
@@ -391,10 +391,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 
 	rbTracer.SendsTo(accounter)
 
-	//If pano var is set: Only send to PerfTracer
-	if pano {
-		perfTracer.SendsTo(packetbuffer)
-	}
+	perfTracer.SendsTo(accounter)
 	if f.cfg.Deduper == DeduperFirstCome {
 		deduper := node.AsMiddle(flow.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark), node.ChannelBufferLen(f.cfg.BuffersLength))
 		if !pano {
@@ -414,12 +411,9 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	decorator.SendsTo(export)
 
 	alog.Debug("starting graph")
-	if pano {
-		perfTracer.Start()
-	} else {
-		mapTracer.Start()
-		rbTracer.Start()
-	}
+	mapTracer.Start()
+	rbTracer.Start()
+	perfTracer.Start()
 	return export, nil
 }
 

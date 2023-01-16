@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/netobserv/netobserv-ebpf-agent/pkg/ifaces"

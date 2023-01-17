@@ -245,11 +245,47 @@ static inline int export_packet_payload (struct __sk_buff *skb) {
     void *data_end = (void *)(long)skb->data_end;
     void *data = (void *)(long)skb->data;
     payload_meta meta;
+    struct ethhdr *eth  = data;
+    struct iphdr  *ip;
+    struct udphdr *udp_data;
+    
+    bpf_printk("Into export packet payload\n");
+    if ((void *)eth + sizeof(*eth) > data_end) {
+       return TC_ACT_UNSPEC;	
+    }
 
-    meta.if_index = skb->ifindex;
-    meta.pkt_len = data_end - data;
-    bpf_perf_event_output(skb, &packet_payloads, ((u64) meta.pkt_len << 32) | BPF_F_CURRENT_CPU, &meta, sizeof(meta));
+    ip = data + sizeof(*eth);
+    if ((void *)ip + sizeof(*ip) > data_end) {
+       return TC_ACT_UNSPEC;	
+    }
+
+    udp_data = (void *)ip + sizeof(*ip);
+    if ((void *)udp_data + sizeof(*udp_data) > data_end) {
+       return TC_ACT_UNSPEC;	
+    }
+
+    if (eth->h_proto != __bpf_htons(ETH_P_IP)) {
+       return TC_ACT_UNSPEC;	
+    }
+
+    //Only analyze UDP packets
+    if (ip->protocol != IPPROTO_UDP ) {
+       return TC_ACT_UNSPEC;	
+    }
+
+    __be16 port = udp_data->dest;
+    //TODO: Update port number/filters to be read from ENV variable
+    __be16 portFromPanoFilter = __bpf_htons(53);
+
+    if (port == portFromPanoFilter) {
+
+       meta.if_index = skb->ifindex;
+       meta.pkt_len = data_end - data;
+       bpf_perf_event_output(skb, &packet_payloads, ((u64) meta.pkt_len << 32) | BPF_F_CURRENT_CPU, &meta, sizeof(meta));
+    }
+       
     return TC_ACT_OK;
+
 }
 
 SEC("tc_pano_ingress")

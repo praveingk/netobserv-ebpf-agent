@@ -121,6 +121,13 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 
 	ingress, egress := flowDirections(cfg)
 
+	pano := cfg.EnablePano
+	panofilters := cfg.PanoFilters
+	//Log stmts are temporary
+	alog.Info("=============PANO============")
+	alog.Info(pano)
+	alog.Info(string(panofilters))
+
 	debug := false
 	if cfg.LogLevel == logrus.TraceLevel.String() || cfg.LogLevel == logrus.DebugLevel.String() {
 		debug = true

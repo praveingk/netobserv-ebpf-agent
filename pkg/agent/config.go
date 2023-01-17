@@ -128,4 +128,9 @@ type Config struct {
 	KafkaTLSUserKeyPath string `env:"KAFKA_TLS_USER_KEY_PATH"`
 	// ProfilePort sets the listening port for Go's Pprof tool. If it is not set, profile is disabled
 	ProfilePort int `env:"PROFILE_PORT"`
+	// EnablePano sets Pano filtering to enable. By default Pano is off.
+	EnablePano bool `env:"ENABLE_PANO" envDefault:"false"`
+	// PanoFilters set the filters to determine packets to filter using PANO. It is a comma separated set.
+	// Example: PANO_FILTER = "udp and port 53"
+	PanoFilters string `env:"PANO_FILTER" envDefault:""`
 }

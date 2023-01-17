@@ -7,9 +7,9 @@
 package pbflow
 
 import (
+	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 )
@@ -162,10 +162,10 @@ type Record struct {
 
 	// protocol as defined by ETH_P_* in linux/if_ether.h
 	// https://github.com/torvalds/linux/blob/master/include/uapi/linux/if_ether.h
-	EthProtocol   uint32                 `protobuf:"varint,1,opt,name=eth_protocol,json=ethProtocol,proto3" json:"eth_protocol,omitempty"`
-	Direction     Direction              `protobuf:"varint,2,opt,name=direction,proto3,enum=pbflow.Direction" json:"direction,omitempty"`
-	TimeFlowStart *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=time_flow_start,json=timeFlowStart,proto3" json:"time_flow_start,omitempty"`
-	TimeFlowEnd   *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=time_flow_end,json=timeFlowEnd,proto3" json:"time_flow_end,omitempty"`
+	EthProtocol   uint32               `protobuf:"varint,1,opt,name=eth_protocol,json=ethProtocol,proto3" json:"eth_protocol,omitempty"`
+	Direction     Direction            `protobuf:"varint,2,opt,name=direction,proto3,enum=pbflow.Direction" json:"direction,omitempty"`
+	TimeFlowStart *timestamp.Timestamp `protobuf:"bytes,3,opt,name=time_flow_start,json=timeFlowStart,proto3" json:"time_flow_start,omitempty"`
+	TimeFlowEnd   *timestamp.Timestamp `protobuf:"bytes,4,opt,name=time_flow_end,json=timeFlowEnd,proto3" json:"time_flow_end,omitempty"`
 	// OSI-layer attributes
 	DataLink  *DataLink  `protobuf:"bytes,5,opt,name=data_link,json=dataLink,proto3" json:"data_link,omitempty"`
 	Network   *Network   `protobuf:"bytes,6,opt,name=network,proto3" json:"network,omitempty"`
@@ -228,14 +228,14 @@ func (x *Record) GetDirection() Direction {
 	return Direction_INGRESS
 }
 
-func (x *Record) GetTimeFlowStart() *timestamppb.Timestamp {
+func (x *Record) GetTimeFlowStart() *timestamp.Timestamp {
 	if x != nil {
 		return x.TimeFlowStart
 	}
 	return nil
 }
 
-func (x *Record) GetTimeFlowEnd() *timestamppb.Timestamp {
+func (x *Record) GetTimeFlowEnd() *timestamp.Timestamp {
 	if x != nil {
 		return x.TimeFlowEnd
 	}

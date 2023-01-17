@@ -122,10 +122,11 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 	}
 
 	ingress, egress := flowDirections(cfg)
-
+	pano := cfg.EnablePano
 	panofilters := cfg.PanoFilters
 	//Log stmts are temporary
-	alog.Info("==========PANO===========")
+	alog.Info("=============PANO============")
+	alog.Info(pano)
 	alog.Info(string(panofilters))
 
 	debug := false
@@ -406,7 +407,7 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 			mapTracer.SendsTo(limiter)
 			accounter.SendsTo(limiter)
 		}
-	}
+}
 	limiter.SendsTo(decorator)
 	decorator.SendsTo(export)
 

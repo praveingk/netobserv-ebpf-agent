@@ -61,7 +61,7 @@ func main() {
 	log.SetFlags(0)
 	flag.Parse()
 
-	receivedRecords := make(chan *pbflow.Records, 100)
+	receivedRecords := make(chan *pbflow.Records, 1000)
 	log.Println("starting flowlogs-dump-collector on port", *port)
 	go func() {
 		_, err := grpc.StartCollector(*port, receivedRecords)
@@ -85,6 +85,7 @@ func main() {
 					record.Direction,
 					record.Bytes,
 					record.Packets,
+					record.Flags,
 					record.TimeFlowEnd.AsTime().Local().Format("15:04:05.000000"),
 				)
 			} else {
@@ -101,6 +102,7 @@ func main() {
 					record.Direction,
 					record.Bytes,
 					record.Packets,
+					record.Flags,
 					record.TimeFlowEnd.AsTime().Local().Format("15:04:05.000000"),
 				)
 			}

@@ -124,6 +124,12 @@ static inline bool set_flags(struct tcphdr *th, int direction, u16 *flags) {
     } else if (th->cwr) {
         *flags |= CWR_FLAG;
     }
+}
+// sets flow fields from IPv4 header information
+static inline int fill_iphdr(struct iphdr *ip, void *data_end, flow_id *id, u16 *flags) {
+    if ((void *)ip + sizeof(*ip) > data_end) {
+        return DISCARD;
+    }
     return false;
 }
 

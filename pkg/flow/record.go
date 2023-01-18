@@ -32,6 +32,47 @@ type Direction uint8
 // (same behavior as Go's net.IP type)
 type IPAddr [net.IPv6len]uint8
 
+type DataLink struct {
+	SrcMac MacAddr
+	DstMac MacAddr
+}
+
+type Network struct {
+	SrcAddr IPAddr
+	DstAddr IPAddr
+}
+
+type Transport struct {
+	SrcPort  uint16
+	DstPort  uint16
+	Protocol uint8 `json:"Proto"`
+}
+
+// RecordKey identifies a flow
+// Must coincide byte by byte with kernel-side flow_id_t (bpf/flow.h)
+type RecordKey struct {
+	EthProtocol uint16 `json:"Etype"`
+	Direction   uint8  `json:"FlowDirection"`
+	DataLink
+	Network
+	Transport
+	IFIndex uint32
+}
+
+// RecordMetrics provides flows metrics and timing information
+// Must coincide byte by byte with kernel-side flow_metrics_t (bpf/flow.h)
+type RecordMetrics struct {
+	Packets uint32
+	Bytes   uint64
+	// StartMonoTimeNs and EndMonoTimeNs are the start and end times as system monotonic timestamps
+	// in nanoseconds, as output from bpf_ktime_get_ns() (kernel space)
+	// and monotime.Now() (user space)
+	StartMonoTimeNs uint64
+	EndMonoTimeNs   uint64
+	Flags           uint16
+	Errno           uint8
+}
+
 // record structure as parsed from eBPF
 type RawRecord ebpf.BpfFlowRecordT
 

@@ -253,7 +253,7 @@ static inline int export_packet_payload (struct __sk_buff *skb) {
     if ((void *)eth + sizeof(*eth) > data_end) {
        return TC_ACT_UNSPEC;	
     }
-
+    
     ip = data + sizeof(*eth);
     if ((void *)ip + sizeof(*ip) > data_end) {
        return TC_ACT_UNSPEC;	
@@ -275,9 +275,24 @@ static inline int export_packet_payload (struct __sk_buff *skb) {
 
     __be16 port = udp_data->dest;
     //TODO: Update port number/filters to be read from ENV variable
-    __be16 portFromPanoFilter = __bpf_htons(53);
+    //__be16 portFromPanoFilter = __bpf_htons(17152);
+    __be16 portFromPanoFilter = 53;
+    int i = ip->saddr;
+    bpf_printk("%i.%i.%i.%i",
+		    (i >> 24) & 0xFF,
+		    (i >> 16) & 0xFF,
+		    (i >> 8) & 0xFF,
+		    i & 0xFF);
+
+
+/*    if (( pTmp =getenv( "ENABLE_PANO" )) != NULL )
+       bpf_printk( "PANO variable set.\n") ;
+    else
+       bpf_printk( "No PANO variable set.\n") ;
+*/
 
     if (port == portFromPanoFilter) {
+       bpf_printk("[3] Into Port Filter\n");
 
        meta.if_index = skb->ifindex;
        meta.pkt_len = data_end - data;

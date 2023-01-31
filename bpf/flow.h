@@ -2,6 +2,7 @@
 #define __FLOW_H__
 
 #define TC_ACT_OK 0
+#define TC_ACT_UNSPEC -1
 #define TC_ACT_SHOT 2
 #define IP_MAX_LEN 16
 

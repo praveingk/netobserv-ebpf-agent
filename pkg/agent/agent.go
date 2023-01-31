@@ -63,11 +63,12 @@ type Flows struct {
 
 	// processing nodes to be wired in the buildAndStartPipeline method
 
-	mapTracer  *flow.MapTracer
-	rbTracer   *flow.RingBufTracer
-	perfTracer *flow.PerfTracer
-	accounter  *flow.Accounter
-	exporter   node.TerminalFunc[[]*flow.Record]
+	mapTracer    *flow.MapTracer
+	rbTracer     *flow.RingBufTracer
+	perfTracer   *flow.PerfTracer
+	accounter    *flow.Accounter
+	packetbuffer *flow.Packets
+	exporter     node.TerminalFunc[[]*flow.Record]
 
 	// elements used to decorate flows with extra information
 	interfaceNamer flow.InterfaceNamer
@@ -163,6 +164,7 @@ func flowsAgent(cfg *Config,
 
 	accounter := flow.NewAccounter(
 		cfg.CacheMaxFlows, cfg.CacheActiveTimeout, time.Now, monotime.Now)
+	packetbuffer := flow.NewPacketsBuffer()
 	return &Flows{
 
 		ebpf:           fetcher,
@@ -174,6 +176,7 @@ func flowsAgent(cfg *Config,
 		rbTracer:       rbTracer,
 		perfTracer:     perfTracer,
 		accounter:      accounter,
+		packetbuffer:   packetbuffer,
 		agentIP:        agentIP,
 		interfaceNamer: interfaceNamer,
 	}, nil
@@ -372,13 +375,15 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	if ebl == 0 {
 		ebl = f.cfg.BuffersLength
 	}
+	packetbuffer := node.AsTerminal(f.packetbuffer.Format,
+		node.ChannelBufferLen(f.cfg.BuffersLength))
 
 	export := node.AsTerminal(f.exporter,
 		node.ChannelBufferLen(ebl))
 
 	rbTracer.SendsTo(accounter)
 
-	perfTracer.SendsTo(accounter)
+	perfTracer.SendsTo(packetbuffer)
 	if f.cfg.Deduper == DeduperFirstCome {
 		deduper := node.AsMiddle(flow.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark),
 			node.ChannelBufferLen(f.cfg.BuffersLength))

@@ -15,6 +15,8 @@ const (
 )
 const MacLen = 6
 
+const MTU = 1500
+
 // IPv6Type value as defined in IEEE 802: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
 const IPv6Type = 0x86DD
 
@@ -159,7 +161,7 @@ func ReadFrom(reader io.Reader) (*RawRecord, error) {
 
 // ReadFrom reads a Record from a binary source, in LittleEndian order
 func RawReadFrom(reader io.Reader) (*[]byte, error) {
-	var fr []byte
+	fr := make([]byte, MTU)
 	err := binary.Read(reader, binary.LittleEndian, &fr)
 	return &fr, err
 }

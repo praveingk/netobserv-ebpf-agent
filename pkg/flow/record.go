@@ -15,7 +15,7 @@ const (
 )
 const MacLen = 6
 
-const MTU = 1500
+const MTU = 64
 
 // IPv6Type value as defined in IEEE 802: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
 const IPv6Type = 0x86DD

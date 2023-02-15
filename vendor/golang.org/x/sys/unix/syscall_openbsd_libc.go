@@ -2,8 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+<<<<<<< HEAD
 //go:build openbsd
 // +build openbsd
+=======
+//go:build openbsd && !mips64
+// +build openbsd,!mips64
+>>>>>>> 0ab9102 (NETOBSERV-868: Update to use cilium auto generated golang structures (#90))
 
 package unix
 

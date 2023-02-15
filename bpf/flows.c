@@ -230,6 +230,7 @@ static inline int fill_ip6hdr(struct ipv6hdr *ip, void *data_end, u8 direction, 
         return DISCARD;
     }
     __builtin_memset(&l4_info, 0, sizeof(l4_info));
+
     __builtin_memcpy(id->src_ip, ip->saddr.in6_u.u6_addr8, 16);
     __builtin_memcpy(id->dst_ip, ip->daddr.in6_u.u6_addr8, 16);
     id->transport_protocol = ip->nexthdr;

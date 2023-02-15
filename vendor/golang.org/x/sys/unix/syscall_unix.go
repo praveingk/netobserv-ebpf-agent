@@ -359,9 +359,19 @@ func Recvmsg(fd int, p, oob []byte, flags int) (n, oobn int, recvflags int, from
 	return
 }
 
+<<<<<<< HEAD
 // RecvmsgBuffers receives a message from a socket using the recvmsg system
 // call. This function is equivalent to Recvmsg, but non-control data read is
 // scattered into the buffers slices.
+=======
+// RecvmsgBuffers receives a message from a socket using the recvmsg
+// system call. The flags are passed to recvmsg. Any non-control data
+// read is scattered into the buffers slices. The results are:
+//   - n is the number of non-control data read into bufs
+//   - oobn is the number of control data read into oob; this may be interpreted using [ParseSocketControlMessage]
+//   - recvflags is flags returned by recvmsg
+//   - from is the address of the sender
+>>>>>>> 0ab9102 (NETOBSERV-868: Update to use cilium auto generated golang structures (#90))
 func RecvmsgBuffers(fd int, buffers [][]byte, oob []byte, flags int) (n, oobn int, recvflags int, from Sockaddr, err error) {
 	iov := make([]Iovec, len(buffers))
 	for i := range buffers {
@@ -380,9 +390,12 @@ func RecvmsgBuffers(fd int, buffers [][]byte, oob []byte, flags int) (n, oobn in
 	return
 }
 
+<<<<<<< HEAD
 // Sendmsg sends a message on a socket to an address using the sendmsg system
 // call. This function is equivalent to SendmsgN, but does not return the
 // number of bytes actually sent.
+=======
+>>>>>>> 0ab9102 (NETOBSERV-868: Update to use cilium auto generated golang structures (#90))
 func Sendmsg(fd int, p, oob []byte, to Sockaddr, flags int) (err error) {
 	_, err = SendmsgN(fd, p, oob, to, flags)
 	return
@@ -430,8 +443,14 @@ func SendmsgN(fd int, p, oob []byte, to Sockaddr, flags int) (n int, err error) 
 }
 
 // SendmsgBuffers sends a message on a socket to an address using the sendmsg
+<<<<<<< HEAD
 // system call. This function is equivalent to SendmsgN, but the non-control
 // data is gathered from buffers.
+=======
+// system call. The flags are passed to sendmsg. Any non-control data written
+// is gathered from buffers. The function returns the number of bytes written
+// to the socket.
+>>>>>>> 0ab9102 (NETOBSERV-868: Update to use cilium auto generated golang structures (#90))
 func SendmsgBuffers(fd int, buffers [][]byte, oob []byte, to Sockaddr, flags int) (n int, err error) {
 	iov := make([]Iovec, len(buffers))
 	for i := range buffers {
@@ -578,7 +597,11 @@ func Lutimes(path string, tv []Timeval) error {
 	return UtimesNanoAt(AT_FDCWD, path, ts, AT_SYMLINK_NOFOLLOW)
 }
 
+<<<<<<< HEAD
 // emptyIovecs reports whether there are no bytes in the slice of Iovec.
+=======
+// emptyIovec reports whether there are no bytes in the slice of Iovec.
+>>>>>>> 0ab9102 (NETOBSERV-868: Update to use cilium auto generated golang structures (#90))
 func emptyIovecs(iov []Iovec) bool {
 	for i := range iov {
 		if iov[i].Len > 0 {

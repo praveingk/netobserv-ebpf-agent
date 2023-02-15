@@ -823,9 +823,15 @@ const (
 	DM_UUID_FLAG                                = 0x4000
 	DM_UUID_LEN                                 = 0x81
 	DM_VERSION                                  = 0xc138fd00
+<<<<<<< HEAD
 	DM_VERSION_EXTRA                            = "-ioctl (2022-07-28)"
 	DM_VERSION_MAJOR                            = 0x4
 	DM_VERSION_MINOR                            = 0x2f
+=======
+	DM_VERSION_EXTRA                            = "-ioctl (2022-02-22)"
+	DM_VERSION_MAJOR                            = 0x4
+	DM_VERSION_MINOR                            = 0x2e
+>>>>>>> 0ab9102 (NETOBSERV-868: Update to use cilium auto generated golang structures (#90))
 	DM_VERSION_PATCHLEVEL                       = 0x0
 	DT_BLK                                      = 0x6
 	DT_CHR                                      = 0x2

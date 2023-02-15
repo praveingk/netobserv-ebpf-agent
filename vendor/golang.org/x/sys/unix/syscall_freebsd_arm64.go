@@ -56,6 +56,7 @@ func sendfile(outfd int, infd int, offset *int64, count int) (written int, err e
 
 func Syscall9(num, a1, a2, a3, a4, a5, a6, a7, a8, a9 uintptr) (r1, r2 uintptr, err syscall.Errno)
 
+<<<<<<< HEAD
 func PtraceIO(req int, pid int, offs uintptr, out []byte, countin int) (count int, err error) {
 	ioDesc := PtraceIoDesc{
 		Op:   int32(req),
@@ -63,6 +64,10 @@ func PtraceIO(req int, pid int, offs uintptr, out []byte, countin int) (count in
 		Addr: uintptr(unsafe.Pointer(&out[0])), // TODO(#58351): this is not safe.
 		Len:  uint64(countin),
 	}
+=======
+func PtraceIO(req int, pid int, addr uintptr, out []byte, countin int) (count int, err error) {
+	ioDesc := PtraceIoDesc{Op: int32(req), Offs: uintptr(unsafe.Pointer(addr)), Addr: uintptr(unsafe.Pointer(&out[0])), Len: uint64(countin)}
+>>>>>>> 0ab9102 (NETOBSERV-868: Update to use cilium auto generated golang structures (#90))
 	err = ptrace(PT_IO, pid, uintptr(unsafe.Pointer(&ioDesc)), 0)
 	return int(ioDesc.Len), err
 }

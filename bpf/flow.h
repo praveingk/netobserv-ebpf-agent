@@ -77,4 +77,7 @@ typedef struct payload_meta_t {
 	u32 if_index;
 	u32 pkt_len;
 } __attribute__((packed)) payload_meta;
+
+// Force emitting struct flow_record into the ELF.
+const struct flow_record_t *unused3 __attribute__((unused));
 #endif

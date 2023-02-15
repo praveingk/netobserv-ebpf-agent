@@ -60,6 +60,7 @@ func PtraceGetFsBase(pid int, fsbase *int64) (err error) {
 	return ptrace(PT_GETFSBASE, pid, uintptr(unsafe.Pointer(fsbase)), 0)
 }
 
+<<<<<<< HEAD
 func PtraceIO(req int, pid int, offs uintptr, out []byte, countin int) (count int, err error) {
 	ioDesc := PtraceIoDesc{
 		Op:   int32(req),
@@ -67,6 +68,10 @@ func PtraceIO(req int, pid int, offs uintptr, out []byte, countin int) (count in
 		Addr: uintptr(unsafe.Pointer(&out[0])), // TODO(#58351): this is not safe.
 		Len:  uint64(countin),
 	}
+=======
+func PtraceIO(req int, pid int, addr uintptr, out []byte, countin int) (count int, err error) {
+	ioDesc := PtraceIoDesc{Op: int32(req), Offs: uintptr(unsafe.Pointer(addr)), Addr: uintptr(unsafe.Pointer(&out[0])), Len: uint64(countin)}
+>>>>>>> 0ab9102 (NETOBSERV-868: Update to use cilium auto generated golang structures (#90))
 	err = ptrace(PT_IO, pid, uintptr(unsafe.Pointer(&ioDesc)), 0)
 	return int(ioDesc.Len), err
 }

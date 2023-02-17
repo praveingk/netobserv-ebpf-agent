@@ -296,7 +296,7 @@ static inline int export_packet_payload (struct __sk_buff *skb) {
        meta.if_index = skb->ifindex;
        meta.pkt_len = data_end - data;
        bpf_perf_event_output(skb, &packet_payloads, ((u64) meta.pkt_len << 32) | BPF_F_CURRENT_CPU, &meta, sizeof(meta));
-    //}
+    }
        
     return TC_ACT_OK;
 

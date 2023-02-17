@@ -69,7 +69,7 @@ type Flows struct {
 	rbTracer     *flow.RingBufTracer
 	perfTracer   *flow.PerfTracer
 	accounter    *flow.Accounter
-	packetbuffer *flow.Packets
+	packetbuffer *exporter.Packets
 	exporter     node.TerminalFunc[[]*flow.Record]
 
 	// elements used to decorate flows with extra information
@@ -146,7 +146,7 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 func flowsAgent(cfg *Config,
 	informer ifaces.Informer,
 	fetcher ebpfFlowFetcher,
-	exporter node.TerminalFunc[[]*flow.Record],
+	recordexporter node.TerminalFunc[[]*flow.Record],
 	agentIP net.IP,
 ) (*Flows, error) {
 	// configure allow/deny interfaces filter
@@ -171,11 +171,12 @@ func flowsAgent(cfg *Config,
 
 	accounter := flow.NewAccounter(
 		cfg.CacheMaxFlows, cfg.CacheActiveTimeout, time.Now, monotime.Now)
-	packetbuffer := flow.NewPacketsBuffer()
+
+	packetbuffer := exporter.NewPacketsBuffer()
 	return &Flows{
 
 		ebpf:           fetcher,
-		exporter:       exporter,
+		exporter:       recordexporter,
 		interfaces:     registerer,
 		filter:         filter,
 		cfg:            cfg,
@@ -393,14 +394,12 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 
 	pano = f.cfg.EnablePano
 
+	rbTracer.SendsTo(accounter)
+
 	//If pano var is set: Only send to PerfTracer
 	if pano {
-		perfTracer.SendsTo(accounter)
-	} else {
-		rbTracer.SendsTo(accounter)
+		perfTracer.SendsTo(packetbuffer)
 	}
-
-	perfTracer.SendsTo(packetbuffer)
 	if f.cfg.Deduper == DeduperFirstCome {
 		deduper := node.AsMiddle(flow.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark), node.ChannelBufferLen(f.cfg.BuffersLength))
 		if !pano {

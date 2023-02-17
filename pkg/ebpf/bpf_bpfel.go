@@ -13,13 +13,18 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+<<<<<<< HEAD
 type BpfFlowId BpfFlowIdT
 
 type BpfFlowIdT struct {
+=======
+type bpfFlowId struct {
+>>>>>>> d44648b (Copy packets from kernel to userspace)
 	EthProtocol       uint16
 	Direction         uint8
 	SrcMac            [6]uint8
 	DstMac            [6]uint8
+<<<<<<< HEAD
 	SrcIp             [16]uint8
 	DstIp             [16]uint8
 	SrcPort           uint16
@@ -36,6 +41,7 @@ type BpfFlowMetricsT struct {
 	Packets         uint32
 	Bytes           uint64
 	StartMonoTimeTs uint64
+	ConnMonoTimeTs  uint64
 	EndMonoTimeTs   uint64
 	Flags           uint16
 	Errno           uint8
@@ -48,6 +54,26 @@ type BpfFlowRecordT struct {
 
 // LoadBpf returns the embedded CollectionSpec for Bpf.
 func LoadBpf() (*ebpf.CollectionSpec, error) {
+=======
+	SrcIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
+	DstIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
+	SrcPort           uint16
+	DstPort           uint16
+	TransportProtocol uint8
+	IfIndex           uint32
+}
+
+type bpfFlowMetrics struct {
+	Packets         uint32
+	Bytes           uint64
+	StartMonoTimeTs uint64
+	EndMonoTimeTs   uint64
+	Errno           uint8
+}
+
+// loadBpf returns the embedded CollectionSpec for bpf.
+func loadBpf() (*ebpf.CollectionSpec, error) {
+>>>>>>> d44648b (Copy packets from kernel to userspace)
 	reader := bytes.NewReader(_BpfBytes)
 	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
 	if err != nil {
@@ -61,9 +87,15 @@ func LoadBpf() (*ebpf.CollectionSpec, error) {
 //
 // The following types are suitable as obj argument:
 //
-//     *BpfObjects
-//     *BpfPrograms
-//     *BpfMaps
+<<<<<<< HEAD
+//	*BpfObjects
+//	*BpfPrograms
+//	*BpfMaps
+=======
+//	*bpfObjects
+//	*bpfPrograms
+//	*bpfMaps
+>>>>>>> d44648b (Copy packets from kernel to userspace)
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
 func LoadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {

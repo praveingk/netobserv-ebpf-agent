@@ -122,11 +122,9 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 	}
 
 	ingress, egress := flowDirections(cfg)
-	pano := cfg.EnablePano
 	panofilters := cfg.PanoFilters
 	//Log stmts are temporary
-	alog.Info("=============PANO============")
-	alog.Info(pano)
+	alog.Info("==========PANO===========")
 	alog.Info(string(panofilters))
 
 	debug := false
@@ -367,7 +365,6 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 	mapTracer := node.AsStart(f.mapTracer.TraceLoop(ctx))
 	rbTracer := node.AsStart(f.rbTracer.TraceLoop(ctx))
-	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 
 	accounter := node.AsMiddle(f.accounter.Account,
 		node.ChannelBufferLen(f.cfg.BuffersLength))
@@ -390,7 +387,16 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 
 	pano = f.cfg.EnablePano
 
+<<<<<<< HEAD
 	rbTracer.SendsTo(accounter)
+=======
+	//If pano var is set: Only send to PerfTracer
+	if pano {
+		perfTracer.SendsTo(accounter)
+	} else {
+		rbTracer.SendsTo(accounter)
+	}
+>>>>>>> f2edae4 (Copy packets from kernel to userspace)
 
 	perfTracer.SendsTo(accounter)
 	if f.cfg.Deduper == DeduperFirstCome {
@@ -407,14 +413,21 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 			mapTracer.SendsTo(limiter)
 			accounter.SendsTo(limiter)
 		}
+<<<<<<< HEAD
 }
+=======
+	}
+>>>>>>> f2edae4 (Copy packets from kernel to userspace)
 	limiter.SendsTo(decorator)
 	decorator.SendsTo(export)
 
 	alog.Debug("starting graph")
-	mapTracer.Start()
-	rbTracer.Start()
-	perfTracer.Start()
+	if pano {
+		perfTracer.Start()
+	} else {
+		mapTracer.Start()
+		rbTracer.Start()
+	}
 	return export, nil
 }
 

@@ -45,6 +45,7 @@ func (m *PerfTracer) TraceLoop(ctx context.Context) node.StartFunc[*[]byte] {
 				return
 			default:
 				if err := m.listenAndForwardPerf(debugging, out); err != nil {
+
 					if errors.Is(err, perf.ErrClosed) {
 						pblog.Debug("Received signal, exiting..")
 						return

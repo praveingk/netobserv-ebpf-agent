@@ -27,6 +27,8 @@ var alog = logrus.WithField("component", "agent.Flows")
 // tests waiting for the agent to accept flows.
 type Status int
 
+var pano bool
+
 const (
 	StatusNotStarted Status = iota
 	StatusStarting
@@ -122,11 +124,9 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 
 	ingress, egress := flowDirections(cfg)
 
-	pano := cfg.EnablePano
 	panofilters := cfg.PanoFilters
 	//Log stmts are temporary
-	alog.Info("=============PANO============")
-	alog.Info(pano)
+	alog.Info("==========PANO===========")
 	alog.Info(string(panofilters))
 
 	debug := false
@@ -280,6 +280,7 @@ func buildFlowExporter(cfg *Config) (node.TerminalFunc[[]*flow.Record], error) {
 			return nil, err
 		}
 		return ipfix.ExportFlows, nil
+	//TODO: Add one case here for pcap export
 	default:
 		return nil, fmt.Errorf("wrong export type %s. Admitted values are grpc, kafka", cfg.Export)
 	}
@@ -365,9 +366,11 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	}
 
 	alog.Debug("connecting flows' processing graph")
+	alog.Info("connecting flows' processing graph")
+
+	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 	mapTracer := node.AsStart(f.mapTracer.TraceLoop(ctx))
 	rbTracer := node.AsStart(f.rbTracer.TraceLoop(ctx))
-	perfTracer := node.AsStart(f.perfTracer.TraceLoop(ctx))
 
 	accounter := node.AsMiddle(f.accounter.Account,
 		node.ChannelBufferLen(f.cfg.BuffersLength))
@@ -388,26 +391,41 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	export := node.AsTerminal(f.exporter,
 		node.ChannelBufferLen(ebl))
 
-	rbTracer.SendsTo(accounter)
+	pano = f.cfg.EnablePano
+
+	//If pano var is set: Only send to PerfTracer
+	if pano {
+		perfTracer.SendsTo(accounter)
+	} else {
+		rbTracer.SendsTo(accounter)
+	}
 
 	perfTracer.SendsTo(packetbuffer)
 	if f.cfg.Deduper == DeduperFirstCome {
-		deduper := node.AsMiddle(flow.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark),
-			node.ChannelBufferLen(f.cfg.BuffersLength))
-		mapTracer.SendsTo(deduper)
+		deduper := node.AsMiddle(flow.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark), node.ChannelBufferLen(f.cfg.BuffersLength))
+		if !pano {
+			mapTracer.SendsTo(deduper)
+		}
 		accounter.SendsTo(deduper)
 		deduper.SendsTo(limiter)
 	} else {
-		mapTracer.SendsTo(limiter)
-		accounter.SendsTo(limiter)
+		if pano {
+			accounter.SendsTo(limiter)
+		} else {
+			mapTracer.SendsTo(limiter)
+			accounter.SendsTo(limiter)
+		}
 	}
 	limiter.SendsTo(decorator)
 	decorator.SendsTo(export)
 
 	alog.Debug("starting graph")
-	mapTracer.Start()
-	rbTracer.Start()
-	perfTracer.Start()
+	if pano {
+		perfTracer.Start()
+	} else {
+		mapTracer.Start()
+		rbTracer.Start()
+	}
 	return export, nil
 }
 

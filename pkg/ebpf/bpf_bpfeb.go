@@ -13,62 +13,49 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type BpfFlowId BpfFlowIdT
-
-type BpfFlowIdT struct {
+type bpfFlowId struct {
 	EthProtocol       uint16
 	Direction         uint8
 	SrcMac            [6]uint8
 	DstMac            [6]uint8
-	SrcIp             [16]uint8
-	DstIp             [16]uint8
+	SrcIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
+	DstIp             struct{ In6U struct{ U6Addr8 [16]uint8 } }
 	SrcPort           uint16
 	DstPort           uint16
 	TransportProtocol uint8
-	IcmpType          uint8
-	IcmpCode          uint8
 	IfIndex           uint32
 }
 
-type BpfFlowMetrics BpfFlowMetricsT
-
-type BpfFlowMetricsT struct {
+type bpfFlowMetrics struct {
 	Packets         uint32
 	Bytes           uint64
 	StartMonoTimeTs uint64
-	ConnMonoTimeTs  uint64
 	EndMonoTimeTs   uint64
-	Flags           uint16
 	Errno           uint8
 }
 
-type BpfFlowRecordT struct {
-	Id      BpfFlowId
-	Metrics BpfFlowMetrics
-}
-
-// LoadBpf returns the embedded CollectionSpec for Bpf.
-func LoadBpf() (*ebpf.CollectionSpec, error) {
+// loadBpf returns the embedded CollectionSpec for bpf.
+func loadBpf() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_BpfBytes)
 	spec, err := ebpf.LoadCollectionSpecFromReader(reader)
 	if err != nil {
-		return nil, fmt.Errorf("can't load Bpf: %w", err)
+		return nil, fmt.Errorf("can't load bpf: %w", err)
 	}
 
 	return spec, err
 }
 
-// LoadBpfObjects loads Bpf and converts it into a struct.
+// loadBpfObjects loads bpf and converts it into a struct.
 //
 // The following types are suitable as obj argument:
 //
-//	*BpfObjects
-//	*BpfPrograms
-//	*BpfMaps
+//	*bpfObjects
+//	*bpfPrograms
+//	*bpfMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
-func LoadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
-	spec, err := LoadBpf()
+func loadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
+	spec, err := loadBpf()
 	if err != nil {
 		return err
 	}
@@ -76,58 +63,58 @@ func LoadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {
 	return spec.LoadAndAssign(obj, opts)
 }
 
-// BpfSpecs contains maps and programs before they are loaded into the kernel.
+// bpfSpecs contains maps and programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
-type BpfSpecs struct {
-	BpfProgramSpecs
-	BpfMapSpecs
+type bpfSpecs struct {
+	bpfProgramSpecs
+	bpfMapSpecs
 }
 
-// BpfSpecs contains programs before they are loaded into the kernel.
+// bpfSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
-type BpfProgramSpecs struct {
+type bpfProgramSpecs struct {
 	EgressFlowParse  *ebpf.ProgramSpec `ebpf:"egress_flow_parse"`
 	EgressPanoParse  *ebpf.ProgramSpec `ebpf:"egress_pano_parse"`
 	IngressFlowParse *ebpf.ProgramSpec `ebpf:"ingress_flow_parse"`
 	IngressPanoParse *ebpf.ProgramSpec `ebpf:"ingress_pano_parse"`
 }
 
-// BpfMapSpecs contains maps before they are loaded into the kernel.
+// bpfMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
-type BpfMapSpecs struct {
+type bpfMapSpecs struct {
 	AggregatedFlows *ebpf.MapSpec `ebpf:"aggregated_flows"`
 	DirectFlows     *ebpf.MapSpec `ebpf:"direct_flows"`
 	PacketPayloads  *ebpf.MapSpec `ebpf:"packet_payloads"`
 }
 
-// BpfObjects contains all objects after they have been loaded into the kernel.
+// bpfObjects contains all objects after they have been loaded into the kernel.
 //
-// It can be passed to LoadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
-type BpfObjects struct {
-	BpfPrograms
-	BpfMaps
+// It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
+type bpfObjects struct {
+	bpfPrograms
+	bpfMaps
 }
 
-func (o *BpfObjects) Close() error {
+func (o *bpfObjects) Close() error {
 	return _BpfClose(
-		&o.BpfPrograms,
-		&o.BpfMaps,
+		&o.bpfPrograms,
+		&o.bpfMaps,
 	)
 }
 
-// BpfMaps contains all maps after they have been loaded into the kernel.
+// bpfMaps contains all maps after they have been loaded into the kernel.
 //
-// It can be passed to LoadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
-type BpfMaps struct {
+// It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
+type bpfMaps struct {
 	AggregatedFlows *ebpf.Map `ebpf:"aggregated_flows"`
 	DirectFlows     *ebpf.Map `ebpf:"direct_flows"`
 	PacketPayloads  *ebpf.Map `ebpf:"packet_payloads"`
 }
 
-func (m *BpfMaps) Close() error {
+func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.AggregatedFlows,
 		m.DirectFlows,
@@ -135,17 +122,17 @@ func (m *BpfMaps) Close() error {
 	)
 }
 
-// BpfPrograms contains all programs after they have been loaded into the kernel.
+// bpfPrograms contains all programs after they have been loaded into the kernel.
 //
-// It can be passed to LoadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
-type BpfPrograms struct {
+// It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
+type bpfPrograms struct {
 	EgressFlowParse  *ebpf.Program `ebpf:"egress_flow_parse"`
 	EgressPanoParse  *ebpf.Program `ebpf:"egress_pano_parse"`
 	IngressFlowParse *ebpf.Program `ebpf:"ingress_flow_parse"`
 	IngressPanoParse *ebpf.Program `ebpf:"ingress_pano_parse"`
 }
 
-func (p *BpfPrograms) Close() error {
+func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.EgressFlowParse,
 		p.EgressPanoParse,

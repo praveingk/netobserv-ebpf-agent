@@ -211,8 +211,7 @@ func buildFlowExporter(cfg *Config) (node.TerminalFunc[[]*flow.Record], error) {
 			return nil, fmt.Errorf("missing target host or port: %s:%d",
 				cfg.TargetHost, cfg.TargetPort)
 		}
-		target := fmt.Sprintf("%s:%d", cfg.TargetHost, cfg.TargetPort)
-		grpcExporter, err := exporter.StartGRPCProto(target, cfg.GRPCMessageMaxFlows)
+		grpcExporter, err := exporter.StartGRPCProto(cfg.TargetHost, cfg.TargetPort, cfg.GRPCMessageMaxFlows)
 		if err != nil {
 			return nil, err
 		}
@@ -262,9 +261,7 @@ func buildFlowExporter(cfg *Config) (node.TerminalFunc[[]*flow.Record], error) {
 			return nil, fmt.Errorf("missing target host or port: %s:%d",
 				cfg.TargetHost, cfg.TargetPort)
 		}
-		target := fmt.Sprintf("%s:%d", cfg.TargetHost, cfg.TargetPort)
-
-		ipfix, err := exporter.StartIPFIXExporter(target, "udp")
+		ipfix, err := exporter.StartIPFIXExporter(cfg.TargetHost, cfg.TargetPort, "udp")
 		if err != nil {
 			return nil, err
 		}
@@ -274,9 +271,7 @@ func buildFlowExporter(cfg *Config) (node.TerminalFunc[[]*flow.Record], error) {
 			return nil, fmt.Errorf("missing target host or port: %s:%d",
 				cfg.TargetHost, cfg.TargetPort)
 		}
-		target := fmt.Sprintf("%s:%d", cfg.TargetHost, cfg.TargetPort)
-
-		ipfix, err := exporter.StartIPFIXExporter(target, "tcp")
+		ipfix, err := exporter.StartIPFIXExporter(cfg.TargetHost, cfg.TargetPort, "tcp")
 		if err != nil {
 			return nil, err
 		}

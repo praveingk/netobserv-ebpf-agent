@@ -290,10 +290,8 @@ static inline int export_packet_payload (struct __sk_buff *skb) {
 		    (i >> 8) & 0xFF,
 		    i & 0xFF);
 	*/
-    bpf_printk( "No PANO variable set. %d -- %d -- %d\n", port, portsrc, portFromPanoFilter) ;
-
+    
     if (portsrc == portFromPanoFilter) {
-       bpf_printk("[3] Into Port Filter\n");
 
        meta.if_index = skb->ifindex;
        meta.pkt_len = data_end - data;

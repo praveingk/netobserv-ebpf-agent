@@ -72,6 +72,7 @@ func main() {
 	for records := range receivedRecords {
 		for _, record := range records.Entries {
 			if record.EthProtocol == ipv6 {
+				log.Printf("%s", record)
 				log.Printf("%s: %v %s IP %s:%d > %s:%d: protocol:%s dir:%d bytes:%d packets:%d ends: %v\n",
 					ipProto[record.EthProtocol],
 					record.TimeFlowStart.AsTime().Local().Format("15:04:05.000000"),
@@ -87,6 +88,7 @@ func main() {
 					record.TimeFlowEnd.AsTime().Local().Format("15:04:05.000000"),
 				)
 			} else {
+				log.Printf("%s", record)
 				log.Printf("%s: %v %s IP %s:%d > %s:%d: protocol:%s dir:%d bytes:%d packets:%d ends: %v\n",
 					ipProto[record.EthProtocol],
 					record.TimeFlowStart.AsTime().Local().Format("15:04:05.000000"),

@@ -125,9 +125,73 @@ static inline bool set_flags(struct tcphdr *th, int direction, u16 *flags) {
         *flags |= CWR_FLAG;
     }
 }
+
+// L4_info structure contains L4 headers parsed information.
+struct l4_info_t {
+    // TCP/UDP/SCTP source port in host byte order
+    u16 src_port;
+    // TCP/UDP/SCTP destination port in host byte order
+    u16 dst_port;
+    // ICMPv4/ICMPv6 type value
+    u8 icmp_type;
+    // ICMPv4/ICMPv6 code value
+    u8 icmp_code;
+    // TCP flags
+    u16 flags;
+};
+
+// Extract L4 info for the supported protocols
+static inline void fill_l4info(void *l4_hdr_start, void *data_end, u8 protocol,
+                               struct l4_info_t *l4_info) {
+	switch (protocol) {
+    case IPPROTO_TCP: {
+        struct tcphdr *tcp = l4_hdr_start;
+        if ((void *)tcp + sizeof(*tcp) <= data_end) {
+            l4_info->src_port = __bpf_ntohs(tcp->source);
+            l4_info->dst_port = __bpf_ntohs(tcp->dest);
+            set_flags(tcp, &l4_info->flags);
+        }
+    } break;
+    case IPPROTO_UDP: {
+        struct udphdr *udp = l4_hdr_start;
+        if ((void *)udp + sizeof(*udp) <= data_end) {
+            l4_info->src_port = __bpf_ntohs(udp->source);
+            l4_info->dst_port = __bpf_ntohs(udp->dest);
+        }
+    } break;
+    case IPPROTO_SCTP: {
+        struct sctphdr *sctph = l4_hdr_start;
+        if ((void *)sctph + sizeof(*sctph) <= data_end) {
+            l4_info->src_port = __bpf_ntohs(sctph->source);
+            l4_info->dst_port = __bpf_ntohs(sctph->dest);
+        }
+    } break;
+    case IPPROTO_ICMP: {
+        struct icmphdr *icmph = l4_hdr_start;
+        if ((void *)icmph + sizeof(*icmph) <= data_end) {
+            l4_info->icmp_type = icmph->type;
+            l4_info->icmp_code = icmph->code;
+        }
+    } break;
+    case IPPROTO_ICMPV6: {
+        struct icmp6hdr *icmp6h = l4_hdr_start;
+         if ((void *)icmp6h + sizeof(*icmp6h) <= data_end) {
+            l4_info->icmp_type = icmp6h->icmp6_type;
+            l4_info->icmp_code = icmp6h->icmp6_code;
+        }
+    } break;
+    default:
+        break;
+    }
+}
+
 // sets flow fields from IPv4 header information
 static inline int fill_iphdr(struct iphdr *ip, void *data_end, flow_id *id, u16 *flags) {
-    if ((void *)ip + sizeof(*ip) > data_end) {
+    struct l4_info_t l4_info;
+    void *l4_hdr_start;
+
+    l4_hdr_start = (void *)ip + sizeof(*ip);
+    if (l4_hdr_start > data_end) {
         return DISCARD;
     }
     return false;

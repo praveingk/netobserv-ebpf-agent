@@ -67,6 +67,7 @@ func (c *Accounter) Account(in <-chan *RawRecord, out chan<- []*Record) {
 			}
 			if stored, ok := c.entries[record.Id]; ok {
 				Accumulate(stored, &record.Metrics)
+				//TODO : Calculate the RTT here!!
 			} else {
 				if len(c.entries) >= c.maxEntries {
 					evictingEntries := c.entries

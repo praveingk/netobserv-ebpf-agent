@@ -36,6 +36,7 @@ type BpfFlowMetricsT struct {
 	Packets         uint32
 	Bytes           uint64
 	StartMonoTimeTs uint64
+	ConnMonoTimeTs  uint64
 	EndMonoTimeTs   uint64
 	Flags           uint16
 	Errno           uint8
@@ -61,9 +62,9 @@ func LoadBpf() (*ebpf.CollectionSpec, error) {
 //
 // The following types are suitable as obj argument:
 //
-//     *BpfObjects
-//     *BpfPrograms
-//     *BpfMaps
+//	*BpfObjects
+//	*BpfPrograms
+//	*BpfMaps
 //
 // See ebpf.CollectionSpec.LoadAndAssign documentation for details.
 func LoadBpfObjects(obj interface{}, opts *ebpf.CollectionOptions) error {

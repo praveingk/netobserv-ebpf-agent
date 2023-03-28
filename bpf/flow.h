@@ -17,6 +17,7 @@ typedef struct flow_metrics_t {
     // Flow start and end times as monotomic timestamps in nanoseconds
     // as output from bpf_ktime_get_ns()
     u64 start_mono_time_ts;
+    u64 conn_mono_time_ts;
     u64 end_mono_time_ts;
     // TCP Flags from https://www.ietf.org/rfc/rfc793.txt
     u16 flags;

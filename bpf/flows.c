@@ -92,10 +92,12 @@ volatile const u8 trace_messages = 0;
 const u8 ip4in6[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 
 // sets the TCP header flags for connection information
-static inline void set_flags(struct tcphdr *th, u16 *flags) {
+// returns true if connection timestamp needs to be stored
+static inline bool set_flags(struct tcphdr *th, int direction, u16 *flags) {
     //If both ACK and SYN are set, then it is server -> client communication during 3-way handshake. 
     if (th->ack && th->syn) {
         *flags |= SYN_ACK_FLAG;
+        return true;
     } else if (th->ack && th->fin ) {
         // If both ACK and FIN are set, then it is graceful termination from server.
         *flags |= FIN_ACK_FLAG;
@@ -108,6 +110,9 @@ static inline void set_flags(struct tcphdr *th, u16 *flags) {
         *flags |= SYN_FLAG;
     } else if (th->ack) {
         *flags |= ACK_FLAG;
+        if (direction == INGRESS && th->seq == 1) {
+            return true;
+        }
     } else if (th->rst) {
         *flags |= RST_FLAG;
     } else if (th->psh) {
@@ -119,6 +124,7 @@ static inline void set_flags(struct tcphdr *th, u16 *flags) {
     } else if (th->cwr) {
         *flags |= CWR_FLAG;
     }
+    return false;
 }
 
 // L4_info structure contains L4 headers parsed information.
@@ -133,10 +139,12 @@ struct l4_info_t {
     u8 icmp_code;
     // TCP flags
     u16 flags;
+	// Connection timestamp capture
+	bool conn_tstamp; 
 };
 
 // Extract L4 info for the supported protocols
-static inline void fill_l4info(void *l4_hdr_start, void *data_end, u8 protocol,
+static inline void fill_l4info(void *l4_hdr_start, void *data_end, u8 direction, u8 protocol,
                                struct l4_info_t *l4_info) {
 	switch (protocol) {
     case IPPROTO_TCP: {
@@ -144,7 +152,7 @@ static inline void fill_l4info(void *l4_hdr_start, void *data_end, u8 protocol,
         if ((void *)tcp + sizeof(*tcp) <= data_end) {
             l4_info->src_port = __bpf_ntohs(tcp->source);
             l4_info->dst_port = __bpf_ntohs(tcp->dest);
-            set_flags(tcp, &l4_info->flags);
+            l4_info->conn_tstamp = set_flags(tcp, direction, &l4_info->flags);
         }
     } break;
     case IPPROTO_UDP: {
@@ -181,7 +189,7 @@ static inline void fill_l4info(void *l4_hdr_start, void *data_end, u8 protocol,
 }
 
 // sets flow fields from IPv4 header information
-static inline int fill_iphdr(struct iphdr *ip, void *data_end, flow_id *id, u16 *flags) {
+static inline int fill_iphdr(struct iphdr *ip, void *data_end, u8 direction, flow_id *id, u16 *flags, bool *conn_tstamp) {
     struct l4_info_t l4_info;
     void *l4_hdr_start;
 
@@ -195,18 +203,19 @@ static inline int fill_iphdr(struct iphdr *ip, void *data_end, flow_id *id, u16 
     __builtin_memcpy(id->src_ip + sizeof(ip4in6), &ip->saddr, sizeof(ip->saddr));
     __builtin_memcpy(id->dst_ip + sizeof(ip4in6), &ip->daddr, sizeof(ip->daddr));
     id->transport_protocol = ip->protocol;
-    fill_l4info(l4_hdr_start, data_end, ip->protocol, &l4_info);
+    fill_l4info(l4_hdr_start, data_end, direction, ip->protocol, &l4_info);
     id->src_port = l4_info.src_port;
     id->dst_port = l4_info.dst_port;
     id->icmp_type = l4_info.icmp_type;
     id->icmp_code = l4_info.icmp_code;
     *flags = l4_info.flags;
+	*conn_tstamp = l4_info.conn_tstamp;
 
     return SUBMIT;
 }
 
 // sets flow fields from IPv6 header information
-static inline int fill_ip6hdr(struct ipv6hdr *ip, void *data_end, flow_id *id, u16 *flags) {
+static inline int fill_ip6hdr(struct ipv6hdr *ip, void *data_end, u8 direction, flow_id *id, u16 *flags, bool *conn_tstamp) {
     struct l4_info_t l4_info;
     void *l4_hdr_start;
 
@@ -218,17 +227,18 @@ static inline int fill_ip6hdr(struct ipv6hdr *ip, void *data_end, flow_id *id, u
     __builtin_memcpy(id->src_ip, ip->saddr.in6_u.u6_addr8, 16);
     __builtin_memcpy(id->dst_ip, ip->daddr.in6_u.u6_addr8, 16);
     id->transport_protocol = ip->nexthdr;
-    fill_l4info(l4_hdr_start, data_end, ip->nexthdr, &l4_info);
+    fill_l4info(l4_hdr_start, data_end, direction, ip->nexthdr, &l4_info);
     id->src_port = l4_info.src_port;
     id->dst_port = l4_info.dst_port;
     id->icmp_type = l4_info.icmp_type;
     id->icmp_code = l4_info.icmp_code;
     *flags = l4_info.flags;
+	*conn_tstamp = l4_info.conn_tstamp;
 
     return SUBMIT;
 }
 // sets flow fields from Ethernet header information
-static inline int fill_ethhdr(struct ethhdr *eth, void *data_end, flow_id *id, u16 *flags) {
+static inline int fill_ethhdr(struct ethhdr *eth, void *data_end, u8 direction, flow_id *id, u16 *flags, bool *conn_tstamp) {
     if ((void *)eth + sizeof(*eth) > data_end) {
         return DISCARD;
     }
@@ -238,10 +248,10 @@ static inline int fill_ethhdr(struct ethhdr *eth, void *data_end, flow_id *id, u
 
     if (id->eth_protocol == ETH_P_IP) {
         struct iphdr *ip = (void *)eth + sizeof(*eth);
-        return fill_iphdr(ip, data_end, id, flags);
+        return fill_iphdr(ip, data_end, direction, id, flags, conn_tstamp);
     } else if (id->eth_protocol == ETH_P_IPV6) {
         struct ipv6hdr *ip6 = (void *)eth + sizeof(*eth);
-        return fill_ip6hdr(ip6, data_end, id, flags);
+        return fill_ip6hdr(ip6, data_end, direction, id, flags, conn_tstamp);
     } else {
         // TODO : Need to implement other specific ethertypes if needed
         // For now other parts of flow id remain zero
@@ -263,11 +273,12 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
     void *data = (void *)(long)skb->data;
 
     flow_id id;
+	bool conn_tstamp = false;
     __builtin_memset(&id, 0, sizeof(id));
     u64 current_time = bpf_ktime_get_ns();
     struct ethhdr *eth = data;
     u16 flags = 0;
-    if (fill_ethhdr(eth, data_end, &id, &flags) == DISCARD) {
+    if (fill_ethhdr(eth, data_end, direction, &id, &flags, &conn_tstamp) == DISCARD) {
         return TC_ACT_OK;
     }
     id.if_index = skb->ifindex;
@@ -284,6 +295,9 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
         // the way percpu hashmap deal with concurrent map entries
         if (aggregate_flow->start_mono_time_ts == 0) {
             aggregate_flow->start_mono_time_ts = current_time;
+        }
+        if (conn_tstamp) {
+            aggregate_flow->conn_mono_time_ts = current_time;
         }
         aggregate_flow->flags |= flags;
         long ret = bpf_map_update_elem(&aggregated_flows, &id, aggregate_flow, BPF_ANY);
@@ -304,6 +318,9 @@ static inline int flow_monitor(struct __sk_buff *skb, u8 direction) {
             .end_mono_time_ts = current_time,
             .flags = flags, 
         };
+        if (conn_tstamp) {
+            new_flow.conn_mono_time_ts = current_time;
+        }
 
         // even if we know that the entry is new, another CPU might be concurrently inserting a flow
         // so we need to specify BPF_ANY

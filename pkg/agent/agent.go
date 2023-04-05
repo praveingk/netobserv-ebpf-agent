@@ -78,6 +78,29 @@ type Flows struct {
 	status Status
 }
 
+// Packets reporting agent
+type Packets struct {
+	cfg *Config
+
+	// input data providers
+	interfaces ifaces.Informer
+	filter     interfaceFilter
+	ebpf       ebpfPacketFetcher
+
+	// processing nodes to be wired in the buildAndStartPipeline method
+
+	perfTracer *flow.PerfTracer
+	//accounter    *flow.Accounter
+	packetbuffer *exporter.Packets
+	exporter     node.TerminalFunc[[]*byte]
+
+	// elements used to decorate flows with extra information
+	interfaceNamer flow.InterfaceNamer
+	agentIP        net.IP
+
+	status Status
+}
+
 // ebpfFlowFetcher abstracts the interface of ebpf.FlowFetcher to allow dependency injection in tests
 type ebpfFlowFetcher interface {
 	io.Closer
@@ -117,15 +140,12 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 
 	// configure selected exporter
 	exportFunc, err := buildFlowExporter(cfg)
+
 	if err != nil {
 		return nil, err
 	}
 
 	ingress, egress := flowDirections(cfg)
-	panofilters := cfg.PanoFilters
-	//Log stmts are temporary
-	alog.Info("==========PANO===========")
-	alog.Info(string(panofilters))
 
 	debug := false
 	if cfg.LogLevel == logrus.TraceLevel.String() || cfg.LogLevel == logrus.DebugLevel.String() {
@@ -138,6 +158,111 @@ func FlowsAgent(cfg *Config) (*Flows, error) {
 	}
 
 	return flowsAgent(cfg, informer, fetcher, exportFunc, agentIP)
+}
+
+// ebpfPacketFetcher abstracts the interface of ebpf.FlowFetcher to allow dependency injection in tests
+type ebpfPacketFetcher interface {
+	io.Closer
+	Register(iface ifaces.Interface) error
+
+	ReadPerf() (perf.Record, error)
+}
+
+// PacketsAgent instantiates a new agent, given a configuration.
+func PacketsAgent(cfg *Config) (*Packets, error) {
+	alog.Info("initializing Packets agent")
+
+	// configure informer for new interfaces
+	var informer ifaces.Informer
+	switch cfg.ListenInterfaces {
+	case ListenPoll:
+		alog.WithField("period", cfg.ListenPollPeriod).
+			Debug("listening for new interfaces: use polling")
+		informer = ifaces.NewPoller(cfg.ListenPollPeriod, cfg.BuffersLength)
+	case ListenWatch:
+		alog.Debug("listening for new interfaces: use watching")
+		informer = ifaces.NewWatcher(cfg.BuffersLength)
+	default:
+		alog.WithField("providedValue", cfg.ListenInterfaces).
+			Warn("wrong interface listen method. Using file watcher as default")
+		informer = ifaces.NewWatcher(cfg.BuffersLength)
+	}
+
+	alog.Debug("acquiring Agent IP")
+	alog.Info("[PANO]acquiring Agent IP")
+	agentIP, err := fetchAgentIP(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("acquiring Agent IP: %w", err)
+	}
+	alog.Debug("agent IP: " + agentIP.String())
+	alog.Info("[PANO]agent IP: " + agentIP.String())
+
+	// configure selected exporter
+	packetexportFunc, err := buildPacketExporter(cfg)
+	alog.Info(err) //+ agentIP.String())
+
+	if err != nil {
+		return nil, err
+	}
+
+	ingress, egress := flowDirections(cfg)
+
+	panofilters := cfg.PanoFilters
+	//Log stmts are temporary
+	alog.Info("==========PANO===========")
+	alog.Info(string(panofilters))
+
+	debug := true
+	if cfg.LogLevel == logrus.TraceLevel.String() || cfg.LogLevel == logrus.DebugLevel.String() {
+		debug = true
+	}
+
+	fetcher, err := ebpf.NewPacketFetcher(debug, cfg.Sampling, cfg.CacheMaxFlows, ingress, egress)
+	//fetcher, err := ebpf.NewPacketFetcher(debug, cfg.Sampling, cfg.CacheMaxFlows, ingress, egress)
+	if err != nil {
+		return nil, err
+	}
+
+	return packetsAgent(cfg, informer, fetcher, packetexportFunc, agentIP)
+}
+
+// flowsAgent is a private constructor with injectable dependencies, usable for tests
+func packetsAgent(cfg *Config,
+	informer ifaces.Informer,
+	fetcher ebpfPacketFetcher,
+	packetexporter node.TerminalFunc[[]*byte],
+	agentIP net.IP,
+) (*Packets, error) {
+	// configure allow/deny interfaces filter
+	filter, err := initInterfaceFilter(cfg.Interfaces, cfg.ExcludeInterfaces)
+	if err != nil {
+		return nil, fmt.Errorf("configuring interface filters: %w", err)
+	}
+
+	registerer := ifaces.NewRegisterer(informer, cfg.BuffersLength)
+
+	interfaceNamer := func(ifIndex int) string {
+		iface, ok := registerer.IfaceNameForIndex(ifIndex)
+		if !ok {
+			return "unknown"
+		}
+		return iface
+	}
+
+	perfTracer := flow.NewPerfTracer(fetcher, cfg.CacheActiveTimeout)
+
+	packetbuffer := exporter.NewPacketsBuffer()
+	return &Packets{
+		// TODO : flows -> Packets
+		ebpf:           fetcher,
+		interfaces:     registerer,
+		filter:         filter,
+		cfg:            cfg,
+		perfTracer:     perfTracer,
+		packetbuffer:   packetbuffer,
+		agentIP:        agentIP,
+		interfaceNamer: interfaceNamer,
+	}, nil
 }
 
 // flowsAgent is a private constructor with injectable dependencies, usable for tests
@@ -202,6 +327,22 @@ func flowDirections(cfg *Config) (ingress, egress bool) {
 	}
 }
 
+func buildPacketExporter(cfg *Config) (node.TerminalFunc[[]*byte], error) {
+	if cfg.TargetHost == "" || cfg.TargetPort == 0 {
+		return nil, fmt.Errorf("missing target host or port: %s:%d",
+			cfg.TargetHost, cfg.TargetPort)
+	}
+	target := fmt.Sprintf("%s:%d", cfg.TargetHost, cfg.TargetPort)
+	//Add HOST PORT(for streaming server) info as fucntion arguments.
+	pcapStreamer, err := exporter.StartPCAPSend(target, cfg.GRPCMessageMaxFlows)
+	//grpcExporter, err := exporter.StartGRPCProto(target, cfg.GRPCMessageMaxFlows)
+	if err != nil {
+		return nil, err
+	}
+
+	return pcapStreamer.ExportFlows, err
+
+}
 func buildFlowExporter(cfg *Config) (node.TerminalFunc[[]*flow.Record], error) {
 	switch cfg.Export {
 	case "grpc":
@@ -309,8 +450,40 @@ func (f *Flows) Run(ctx context.Context) error {
 	return nil
 }
 
+// Run a Packets agent. The function will keep running in the same thread
+// until the passed context is canceled
+func (p *Packets) Run(ctx context.Context) error {
+	p.status = StatusStarting
+	alog.Info("starting Flows agent")
+	graph, err := p.buildAndStartPipeline(ctx)
+	if err != nil {
+		return fmt.Errorf("starting processing graph: %w", err)
+	}
+
+	p.status = StatusStarted
+	alog.Info("Flows agent successfully started")
+	<-ctx.Done()
+
+	p.status = StatusStopping
+	alog.Info("stopping Flows agent")
+	if err := p.ebpf.Close(); err != nil {
+		alog.WithError(err).Warn("eBPF resources not correctly closed")
+	}
+
+	alog.Debug("waiting for all nodes to finish their pending work")
+	<-graph.Done()
+
+	p.status = StatusStopped
+	alog.Info("Flows agent stopped")
+	return nil
+}
+
 func (f *Flows) Status() Status {
 	return f.status
+}
+
+func (p *Packets) Status() Status {
+	return p.status
 }
 
 // interfacesManager uses an informer to check new/deleted network interfaces. For each running
@@ -336,6 +509,39 @@ func (f *Flows) interfacesManager(ctx context.Context) error {
 				switch event.Type {
 				case ifaces.EventAdded:
 					f.onInterfaceAdded(event.Interface)
+				case ifaces.EventDeleted:
+					// qdiscs, ingress and egress filters are automatically deleted so we don't need to
+					// specifically detach them from the ebpfFetcher
+				default:
+					slog.WithField("event", event).Warn("unknown event type")
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (p *Packets) interfacesManager(ctx context.Context) error {
+	slog := alog.WithField("function", "interfacesManager")
+
+	slog.Debug("subscribing for network interface events")
+	ifaceEvents, err := p.interfaces.Subscribe(ctx)
+	if err != nil {
+		return fmt.Errorf("instantiating interfaces' informer: %w", err)
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Debug("stopping interfaces' listener")
+				return
+			case event := <-ifaceEvents:
+				slog.WithField("event", event).Debug("received event")
+				switch event.Type {
+				case ifaces.EventAdded:
+					p.onInterfaceAdded(event.Interface)
 				case ifaces.EventDeleted:
 					// qdiscs, ingress and egress filters are automatically deleted so we don't need to
 					// specifically detach them from the ebpfFetcher
@@ -385,9 +591,12 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	export := node.AsTerminal(f.exporter,
 		node.ChannelBufferLen(ebl))
 
+<<<<<<< HEAD
 	pano = f.cfg.EnablePano
 
 <<<<<<< HEAD
+=======
+>>>>>>> ee4ca02 (WIP: Adding payload byte stream export from kernel to userspace)
 	rbTracer.SendsTo(accounter)
 =======
 	//If pano var is set: Only send to PerfTracer
@@ -401,12 +610,11 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 	perfTracer.SendsTo(accounter)
 	if f.cfg.Deduper == DeduperFirstCome {
 		deduper := node.AsMiddle(flow.Dedupe(f.cfg.DeduperFCExpiry, f.cfg.DeduperJustMark), node.ChannelBufferLen(f.cfg.BuffersLength))
-		if !pano {
-			mapTracer.SendsTo(deduper)
-		}
+		mapTracer.SendsTo(deduper)
 		accounter.SendsTo(deduper)
 		deduper.SendsTo(limiter)
 	} else {
+<<<<<<< HEAD
 		if pano {
 			accounter.SendsTo(limiter)
 		} else {
@@ -416,18 +624,50 @@ func (f *Flows) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*fl
 <<<<<<< HEAD
 }
 =======
+=======
+		mapTracer.SendsTo(limiter)
+		accounter.SendsTo(limiter)
+>>>>>>> ee4ca02 (WIP: Adding payload byte stream export from kernel to userspace)
 	}
 >>>>>>> f2edae4 (Copy packets from kernel to userspace)
 	limiter.SendsTo(decorator)
 	decorator.SendsTo(export)
 
 	alog.Debug("starting graph")
-	if pano {
-		perfTracer.Start()
-	} else {
-		mapTracer.Start()
-		rbTracer.Start()
+	mapTracer.Start()
+	rbTracer.Start()
+
+	return export, nil
+}
+
+func (p *Packets) buildAndStartPipeline(ctx context.Context) (*node.Terminal[[]*byte], error) {
+
+	alog.Debug("registering interfaces' listener in background")
+	err := p.interfacesManager(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	alog.Debug("connecting flows' processing graph")
+	alog.Info("connecting flows' processing graph")
+
+	perfTracer := node.AsStart(p.perfTracer.TraceLoop(ctx))
+
+	ebl := p.cfg.ExporterBufferLength
+	if ebl == 0 {
+		ebl = p.cfg.BuffersLength
+	}
+	packetbuffer := node.AsTerminal(p.packetbuffer.Format,
+		node.ChannelBufferLen(p.cfg.BuffersLength))
+
+	export := node.AsTerminal(p.exporter,
+		node.ChannelBufferLen(ebl))
+
+	perfTracer.SendsTo(packetbuffer)
+
+	alog.Debug("starting graph for packet stream")
+	perfTracer.Start()
+
 	return export, nil
 }
 
@@ -440,6 +680,21 @@ func (f *Flows) onInterfaceAdded(iface ifaces.Interface) {
 	}
 	alog.WithField("interface", iface).Info("interface detected. Registering flow ebpfFetcher")
 	if err := f.ebpf.Register(iface); err != nil {
+		alog.WithField("interface", iface).WithError(err).
+			Warn("can't register flow ebpfFetcher. Ignoring")
+		return
+	}
+}
+
+func (p *Packets) onInterfaceAdded(iface ifaces.Interface) {
+	// ignore interfaces that do not match the user configuration acceptance/exclusion lists
+	if !p.filter.Allowed(iface.Name) {
+		alog.WithField("interface", iface).
+			Debug("interface does not match the allow/exclusion filters. Ignoring")
+		return
+	}
+	alog.WithField("interface", iface).Info("interface detected. Registering flow ebpfFetcher")
+	if err := p.ebpf.Register(iface); err != nil {
 		alog.WithField("interface", iface).WithError(err).
 			Warn("can't register flow ebpfFetcher. Ignoring")
 		return

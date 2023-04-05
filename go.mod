@@ -7,6 +7,7 @@ require (
 	github.com/cilium/ebpf v0.10.0
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424
 	github.com/golang/protobuf v1.5.2
+	github.com/google/gopacket v1.1.19
 	github.com/mariomac/guara v0.0.0-20220523124851-5fc279816f1f
 	github.com/netobserv/gopipes v0.3.0
 	github.com/paulbellamy/ratecounter v0.2.0

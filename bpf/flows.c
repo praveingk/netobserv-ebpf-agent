@@ -73,8 +73,8 @@ struct {
 // Perf Buffer to submit packet payloads to userspace
 struct {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
-    __uint(key_size, sizeof(int));
-    __uint(value_size, sizeof(int));
+    __uint(key, sizeof(int));
+    __uint(value, sizeof(packet_payload));
 } packet_payloads SEC(".maps");
 
 // Key: the flow identifier. Value: the flow metrics for that identifier.
